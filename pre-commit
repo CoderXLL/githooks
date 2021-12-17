@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# use for SourceTree And Xcode
+if test -d "/opt/homebrew/bin/"; then
+  PATH="/opt/homebrew/bin/:${PATH}"
+fi
+export PATH
+
+# 检测swiftLint工具是否安装
+if [ -z "$(which swiftlint)" ]
+then
+    cat <<\EOF
+    设备上没有检测到SwiftLint，请使用以下命令进行下载安装：
+    brew install swiftLint
+EOF
+    exit 1
+fi
+
+# 接收lint结果，并进行格式化处理
+function dealLintResult() {
+  while read -r line; do
+    FILE_NAME=$(echo "$line" | cut -d : -f 1 | rev | cut -d / -f 1 | rev)
+    LINE=$(echo "$line" | cut -d : -f 2)
+    COLUMN=$(echo "$line" | cut -d : -f 3)
+    VIOLATION_TYPE=$(echo "$line" | cut -d : -f 4 | cut -c 2-)
+    VIOLATION=$(echo "$line" | cut -d : -f 5 | cut -c 2-)
+    DESCRIPTION=$(echo "$line" | cut -d : -f 6 | cut -c 2-)
+
+    if [ "$VIOLATION_TYPE" == "warning" ]; then
+      echo -e "\n⚠️  $VIOLATION \n"
+    else
+      echo -e "\n❌ $VIOLATION \n"
+    fi
+    echo -e "$FILE_NAME: 第${LINE}行 第${COLUMN}列。- $DESCRIPTION \n"
+    echo "---------------------------------------------------------------------"
+  done <<<"$1"
+  
+  printf "\n🙅🏻‍♀️🈲提交被阻止，请在提交前修复好以上问题\n"
+  cat <<\EOF
+  或使用终极命令 git commit -m 'xxx' --no-verify （不建议使用）
+EOF
+}
+
+EXIT_CODE=0
+
+COMMIT_SWIFT_FILES=()
+# 搜集un-staged files中的swift文件
+CHANGED_FILES_UNSTAGED=$(git diff --diff-filter=d --name-only -- "*.swift")
+if [ "$CHANGED_FILES_UNSTAGED" ]; then
+  COMMIT_SWIFT_FILES+=("$CHANGED_FILES_UNSTAGED")
+fi
+
+# 搜集staged files中的swift文件
+CHANGED_FILES_STAGED=$(git diff --cached --diff-filter=d --name-only -- "*.swift")
+if [ "$CHANGED_FILES_STAGED" ]; then
+  COMMIT_SWIFT_FILES+=("$CHANGED_FILES_STAGED")
+fi
+
+# 遍历所有添加的swift文件，并对其逐一进行lint
+while read -r swiftfile; do
+  LINTRESULT=$($(which swiftlint) lint --quiet --path "$swiftfile" --config ".swiftlint.yml")
+  if [ -n "$LINTRESULT" ]; then
+    dealLintResult "$LINTRESULT"
+    EXIT_CODE=1
+  fi
+done <<<"${COMMIT_SWIFT_FILES[@]}"
+
+exit $EXIT_CODE
+

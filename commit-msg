@@ -1,0 +1,64 @@
+#!/bin/sh
+#
+# An example hook script to check the commit log message.
+# Called by "git commit" with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "commit-msg".
+
+# Uncomment the below to add a Signed-off-by line to the message.
+# Doing this in a hook is a bad idea in general, but the prepare-commit-msg
+# hook is more suited to it.
+#
+# SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+# grep -qs "^$SOB" "$1" || echo "$SOB" >> "$1"
+
+# This example catches duplicate Signed-off-by lines.
+
+forcecommit=$(git config --type=bool hooks.forcecommit)
+
+if [ "$forcecommit" != "true" ]
+ then
+if [ "$(grep '^feat:' "$1")" == "" ] &&
+   [ "$(grep '^fix:' "$1")" == "" ] &&
+   [ "$(grep '^lint_error:' "$1")" == "" ] &&
+   [ "$(grep '^lint_warning:' "$1")" == "" ] &&
+   [ "$(grep '^docs:' "$1")"  == "" ] &&
+   [ "$(grep '^style:' "$1")" == "" ] &&
+   [ "$(grep '^refactor:' "$1")" == "" ] &&
+   [ "$(grep '^test:' "$1")" = "" ] &&
+   [ "$(grep '^chore:' "$1")" == "" ]
+then
+    cat <<\EOF
+    ❌错误：提交日志格式错误; 如需强制提交，可执行以下命令(仅限于本次提交)
+        git config hooks.forcecommit true
+    我们有如下几种提交格式可供选择：
+    
+    feat: 新功能（feature）
+    fix: 修补bug
+    lint_error: 处理lint❎
+    lint_warning: 处理lint⚠️
+    docs: 文档（documentation）
+    style: 格式（不影响代码运行)
+    refactor: 重构（即不是新增功能，也不是修改bug的代码变动）
+    test: 增加测试
+    chore: 构建过程或辅助工具的变动
+    
+    如 "feat：新增直播间粉丝之间问候语"
+    📢：冒号为英文格式，切记切记
+EOF
+    exit 1
+fi
+else
+    git config hooks.forcecommit false
+fi
+
+
+# echo "提交的日志为:$1"
+# test "" = "$(grep '^Signed-off-by: ' "$1" |
+#	 sort | uniq -c | sed -e '/^[ 	]*1[ 	]/d')" || {
+#	echo >&2 Duplicate Signed-off-by lines.
+#	exit 1
+# }
